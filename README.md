@@ -4,6 +4,10 @@
 #### What is Project ORBITAL?
 Project ORBITAL is a centralized matrix for mapping, fingerprinting, and hunting China-nexus Operational Relay Box (ORB) networks and malicious edge-device infrastructure based on Open Source Intelligence (OSINT) public reporting.
 
+#### Resources
+- [Targeted Devices by ORBs](https://github.com/BushidoUK/Project-Orbital/blob/main/Adversaries.md)
+- [Adversaries using ORBs](https://github.com/BushidoUK/Project-Orbital/blob/main/Adversaries.md)
+
 ---
 
 | Report Date | Report Source | Cluster Name | Known APTs | Target Appliances | CVEs Exploited | Core Capabilities | Persistence Mechanism | Network Fingerprint |
