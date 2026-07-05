@@ -10,6 +10,8 @@ Project ORBITAL is a centralized matrix for mapping, fingerprinting, and hunting
 
 ---
 
+## ORB Library
+
 | Report Date | Report Source | Cluster Name | Known APTs | Target Appliances | CVEs Exploited | Core Capabilities | Persistence Mechanism | Network Fingerprint |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Nov 2021** | [Sekoia](https://blog.sekoia.io/walking-on-apt31-infrastructure-footprints/) | Pakedge infrastructure | APT31 (MSS contractors) | Pakedge, CyberOAM, Netgear, D-Link | Mix of known and unknown vulnerabilities | Proxies for frontal attacks, reconnaissance, C2 for various implants | Unknown | Patterns in DNS naming (e.g., "update", "cloud") and specific email domains for registration |
