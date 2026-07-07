@@ -33,3 +33,4 @@ This file provides a comprehensive breakdown of the hardware targeted for compro
 | Pakedge Routers | Pakedge Infrastructure / APT31 |
 | CyberOAM Appliances | Pakedge Infrastructure / APT31 |
 | BMC Controllers | ViciousTrap |
+| Zyxel CPE Routers | Weaver Ant |
