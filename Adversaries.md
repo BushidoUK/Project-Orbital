@@ -1,4 +1,4 @@
-### **Adversaries.md**
+### **Adversaries**
 
 This file tracks the relationship between known threat groups and the ORB networks they utilize to mask their operational activity and maintain persistence.
 
