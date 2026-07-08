@@ -18,3 +18,6 @@ This file details the publicly available software, communication protocols, and 
 | [**libcurl**](https://curl.se/libcurl/) | Client-side URL transfer library. | **Quad7 (UPDTAE)** | Statically linked into reverse shells to facilitate HTTP-based beaconing every 30 seconds. |
 | [**wzshiming/sshd**](https://github.com/wzshiming/sshd) | Go-based SSH server project. | **UNC3886** | Leveraged as the base for custom SSH servers used to hijack legitimate authentications. |
 | [Mirai](https://github.com/jgamblin/Mirai-Source-Code) | Mirai Botnet source code | **Flax Typhoon** (ETHEREAL PANDA) | Used as the foundational code for customized malware to hijack Linux-based IoT devices |
+| [**Boost.Asio**](https://www.boost.org/doc/libs/latest/doc/html/boost_asio.html) | Asynchronous network library. | **UAT-7810** | Used to build the LONGLEASH variant for MIPS to minimize blocking and maximize performance. |
+| [**Nanopb**](https://jpa.kapsi.fi/nanopb/) | Protobuf library for C. | **UAT-7810** | Contained within LONGLEASH for processing protocol buffer encoded messages. | 
+| [**musl libc**](https://musl.libc.org/) | C standard library. | **UAT-7810** | Used by LONGLEASH to implement C functions directly on top of Linux syscalls. | 
