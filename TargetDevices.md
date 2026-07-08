@@ -34,3 +34,5 @@ This file provides a comprehensive breakdown of the hardware targeted for compro
 | CyberOAM Appliances | Pakedge Infrastructure / APT31 |
 | BMC Controllers | ViciousTrap |
 | Zyxel CPE Routers | Weaver Ant |
+| Ruckus Wireless Routers | UAT-7810 / LapDogs | 
+| ASUS AiCloud Routers | UAT-7810 / LapDogs | 
