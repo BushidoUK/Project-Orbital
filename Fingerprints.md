@@ -47,4 +47,4 @@ Banners and specific port assignments provide behavioral fingerprints for automa
 | **UNC3886 (jdosd)** | `33512 (UDP)` | Encrypted beacon (responds with PID). | [Google/Mandiant](https://cloud.google.com/blog/topics/threat-intelligence/china-nexus-espionage-targets-juniper-routers) |
 | **ZuoRAT** | `48101` | Mutex listener (ensures single execution). | [Lumen](https://www.lumen.com/blog/en-us/zuorat-hijacks-soho-routers-silently-stalk-networks) |
 | **Silk Typhoon** (MURKY PANDA) | `34125` | Upstream management servers used by botnet administrators. | [media.defense.gov](https://media.defense.gov/2024/Sep/18/2003547016/-1/-1/0/CSA-PRC-LINKED-ACTORS-BOTNET.PDF)  |
-| **UAT-7810 (Infrastructure)** | `99 (TCP)` | TLS server used for payload distribution. | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **UAT-7810** (LapDogs) | `99 (TCP)` | TLS server used for payload distribution. | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
