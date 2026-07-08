@@ -31,4 +31,5 @@ This file provides a technical catalog of the binaries, scripts, and certificate
 | **GobRAT** | zonesetup.sh | SHA-256 | `6632fe263bf687fb8d46dd29eaf90601350681aa1930a14e2aba2a16f6c3e040` | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
 | **GobRAT** | hold_by_bot.sh | SHA-256 | `869a6cd8205af5ec1bf04e6abf0ff79f12e62a8eeae129b9e219e1179520bac3` | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
 | **LapDogs** | Bash startup script | SHA-256 | `75618401b64046d970df49fcfdfcc36174b0aae27ac4e1c178dc75219992080a` | [SecurityScorecard](https://securityscorecard.com/wp-content/uploads/2025/06/LapDogs-STRIKE-Report-June-2025.pdf) |
-
+| **UAT-7810 (LapDogs)** | **LEASHTEST** (iot-test) | SHA-256 | `1b5649b479fd625de5c8120873644b5eb669cc89cd504582c18e0ae350fd8823` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **UAT-7810 (LapDogs)** | **LONGLEASH** (ff-agent / nz1.0) | SHA-256 | `755fcee1337a252203002ecfdf673a08cfadeda8d738bef2d518a08e0626aa4f` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
