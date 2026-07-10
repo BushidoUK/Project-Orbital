@@ -430,15 +430,16 @@ def main():
     html_content = html_content.replace("</head>", f"{custom_css}\n</head>")
 
     # Custom Grid Layout Button and JavaScript
+    # Custom Layout Toggle Button and JavaScript State Machine
     custom_js_ui = """
-    <button id="gridLayoutButton">Grid Layout</button>
+    <button id="layoutToggleButton">Switch to Grid View</button>
     <style>
-        #gridLayoutButton {
+        #layoutToggleButton {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            bottom: 30px;
+            right: 30px;
             z-index: 999;
-            background-color: #ff4757;
+            background-color: #54a0ff;
             color: white;
             border-radius: 5px;
             font-weight: bold;
@@ -447,60 +448,94 @@ def main():
             padding: 10px 15px;
             font-family: 'Outfit', sans-serif;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-            transition: background-color 0.2s, transform 0.1s;
+            transition: background-color 0.3s ease, transform 0.1s;
         }
-        #gridLayoutButton:hover {
-            background-color: #ff6b81;
+        #layoutToggleButton:hover {
+            background-color: #70b0ff;
             transform: translateY(-1px);
         }
-        #gridLayoutButton:active {
-            background-color: #e2283e;
+        #layoutToggleButton:active {
             transform: translateY(1px);
         }
     </style>
     <script type="text/javascript">
-        document.getElementById('gridLayoutButton').addEventListener('click', function() {
-            // Temporarily disable the PyVis network physics
-            network.setOptions({ physics: { enabled: false } });
+        var isGridLayout = false;
 
-            // Extract all node data
-            var allNodes = nodes.get(nodes.getIds());
+        document.getElementById('layoutToggleButton').addEventListener('click', function() {
+            var btn = this;
+            if (!isGridLayout) {
+                // Switch to Grid View
+                // 1. Turn off PyVis physics tracking
+                network.setOptions({ physics: { enabled: false } });
 
-            // Group the nodes by their group attribute
-            var groups = {};
-            allNodes.forEach(function(node) {
-                var g = node.group || 'default';
-                if (!groups[g]) {
-                    groups[g] = [];
-                }
-                groups[g].push(node.id);
-            });
+                // 2. Extract all node IDs and collect the nodes
+                var allNodes = nodes.get(nodes.getIds());
 
-            // Arrange the groups into distinct horizontal columns
-            var groupColumns = {
-                'Actor': -400,
-                'Infrastructure': 0,
-                'Target': 400
-            };
-
-            var ySpacing = 80;
-
-            Object.keys(groups).forEach(function(g, colIdx) {
-                var x = groupColumns[g] !== undefined ? groupColumns[g] : (colIdx - 1) * 400;
-                var nodeList = groups[g];
-                
-                // Calculate starting Y to center the column vertically around 0
-                var totalHeight = (nodeList.length - 1) * ySpacing;
-                var startY = -totalHeight / 2;
-
-                nodeList.forEach(function(nodeId, nodeIdx) {
-                    var y = startY + (nodeIdx * ySpacing);
-                    network.moveNode(nodeId, x, y);
+                // 3. Group them cleanly by their group attribute
+                var groups = {};
+                allNodes.forEach(function(node) {
+                    var g = node.group || 'default';
+                    if (!groups[g]) {
+                        groups[g] = [];
+                    }
+                    groups[g].push(node.id);
                 });
-            });
 
-            // Automatically fit the viewport to focus on the grid layout
-            network.fit({ animation: true });
+                // Arrange columns from right to left: Target on the right, Infrastructure in middle, Actor on the left
+                var groupColumns = {
+                    'Target': 400,
+                    'Infrastructure': 0,
+                    'Actor': -400
+                };
+
+                var ySpacing = 80;
+
+                Object.keys(groups).forEach(function(g, colIdx) {
+                    var x = groupColumns[g] !== undefined ? groupColumns[g] : (1 - colIdx) * 400;
+                    var nodeList = groups[g];
+                    
+                    // Increment Y vertically down the screen centered around Y=0
+                    var totalHeight = (nodeList.length - 1) * ySpacing;
+                    var startY = -totalHeight / 2;
+
+                    nodeList.forEach(function(nodeId, nodeIdx) {
+                        var y = startY + (nodeIdx * ySpacing);
+                        network.moveNode(nodeId, x, y);
+                    });
+                });
+
+                // 4. Trigger smooth zoom-to-fit
+                network.fit({ animation: true });
+
+                // 5. Toggle UI state: Red color (#ff4757), text "Re-enable Physics View"
+                btn.style.backgroundColor = '#ff4757';
+                btn.innerText = 'Re-enable Physics View';
+                
+                // Add quick style override for hover state color changes
+                btn.onmouseover = function() { btn.style.backgroundColor = '#ff6b81'; };
+                btn.onmouseout = function() { btn.style.backgroundColor = '#ff4757'; };
+
+                isGridLayout = true;
+            } else {
+                // Switch back to Unstructured Physics
+                // 1. Turn PyVis physics back on
+                network.setOptions({ physics: { enabled: true } });
+
+                // 2. Trigger settling pass simulation
+                network.stabilize();
+
+                // 3. Reset viewport framing
+                network.fit({ animation: true });
+
+                // 4. Toggle UI state back: Sky Blue (#54a0ff), text "Switch to Grid View"
+                btn.style.backgroundColor = '#54a0ff';
+                btn.innerText = 'Switch to Grid View';
+                
+                btn.onmouseover = function() { btn.style.backgroundColor = '#70b0ff'; };
+                btn.onmouseout = function() { btn.style.backgroundColor = '#54a0ff'; };
+
+                isGridLayout = false;
+            }
         });
     </script>
     """
