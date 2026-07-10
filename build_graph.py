@@ -368,75 +368,153 @@ def main():
     """)
 
     # Write HTML file
-    net.write_html(output_html)
+    # Generate HTML content in-memory
+    print("Generating HTML content...")
+    html_content = net.generate_html()
 
-    # Post-process HTML file to inject titles and custom styles
-    if os.path.exists(output_html):
-        print("Applying post-processing to HTML file...")
-        with open(output_html, "r", encoding="utf-8") as f:
-            html = f.read()
+    print("Applying post-processing to HTML content...")
 
-        # Update Title
-        html = re.sub(
-            r"<title>.*?</title>",
-            "<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>",
-            html,
-            flags=re.IGNORECASE
-        )
-        if "<title>" not in html:
-            html = html.replace("<head>", "<head>\n<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>")
+    # Update Title
+    html_content = re.sub(
+        r"<title>.*?</title>",
+        "<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>",
+        html_content,
+        flags=re.IGNORECASE
+    )
+    if "<title>" not in html_content:
+        html_content = html_content.replace("<head>", "<head>\n<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>")
 
-        # Inject Premium Fonts & Custom Styles
-        custom_css = """
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
-            
-            body {
-                font-family: 'Outfit', 'Segoe UI', sans-serif !important;
-                background-color: #222222 !important;
-            }
-            
-            div.vis-tooltip {
-                background-color: rgba(30, 30, 30, 0.95) !important;
-                border: 1px solid #444444 !important;
-                color: #ffffff !important;
-                font-family: 'Outfit', sans-serif !important;
-                font-size: 13px !important;
-                padding: 12px 16px !important;
-                border-radius: 8px !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
-                max-width: 350px !important;
-                line-height: 1.5 !important;
-            }
-            
-            select, input, button {
-                background-color: #2d2d2d !important;
-                border: 1px solid #444 !important;
-                color: #fff !important;
-                border-radius: 4px !important;
-                padding: 6px 12px !important;
-                font-family: 'Outfit', sans-serif !important;
-            }
-            
-            select:focus, input:focus {
-                border-color: #54a0ff !important;
-                outline: none !important;
-            }
-            
-            .vis-configuration-wrapper {
-                background-color: #222222 !important;
-                color: #ffffff !important;
-            }
-        </style>
-        """
-        html = html.replace("</head>", f"{custom_css}\n</head>")
+    # Inject Premium Fonts & Custom Styles
+    custom_css = """
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+        
+        body {
+            font-family: 'Outfit', 'Segoe UI', sans-serif !important;
+            background-color: #222222 !important;
+        }
+        
+        div.vis-tooltip {
+            background-color: rgba(30, 30, 30, 0.95) !important;
+            border: 1px solid #444444 !important;
+            color: #ffffff !important;
+            font-family: 'Outfit', sans-serif !important;
+            font-size: 13px !important;
+            padding: 12px 16px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+            max-width: 350px !important;
+            line-height: 1.5 !important;
+        }
+        
+        select, input, button {
+            background-color: #2d2d2d !important;
+            border: 1px solid #444 !important;
+            color: #fff !important;
+            border-radius: 4px !important;
+            padding: 6px 12px !important;
+            font-family: 'Outfit', sans-serif !important;
+        }
+        
+        select:focus, input:focus {
+            border-color: #54a0ff !important;
+            outline: none !important;
+        }
+        
+        .vis-configuration-wrapper {
+            background-color: #222222 !important;
+            color: #ffffff !important;
+        }
+    </style>
+    """
+    html_content = html_content.replace("</head>", f"{custom_css}\n</head>")
 
+    # Custom Grid Layout Button and JavaScript
+    custom_js_ui = """
+    <button id="gridLayoutButton">Grid Layout</button>
+    <style>
+        #gridLayoutButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background-color: #ff4757;
+            color: white;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            padding: 10px 15px;
+            font-family: 'Outfit', sans-serif;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        #gridLayoutButton:hover {
+            background-color: #ff6b81;
+            transform: translateY(-1px);
+        }
+        #gridLayoutButton:active {
+            background-color: #e2283e;
+            transform: translateY(1px);
+        }
+    </style>
+    <script type="text/javascript">
+        document.getElementById('gridLayoutButton').addEventListener('click', function() {
+            // Temporarily disable the PyVis network physics
+            network.setOptions({ physics: { enabled: false } });
+
+            // Extract all node data
+            var allNodes = nodes.get(nodes.getIds());
+
+            // Group the nodes by their group attribute
+            var groups = {};
+            allNodes.forEach(function(node) {
+                var g = node.group || 'default';
+                if (!groups[g]) {
+                    groups[g] = [];
+                }
+                groups[g].push(node.id);
+            });
+
+            // Arrange the groups into distinct horizontal columns
+            var groupColumns = {
+                'Actor': -400,
+                'Infrastructure': 0,
+                'Target': 400
+            };
+
+            var ySpacing = 80;
+
+            Object.keys(groups).forEach(function(g, colIdx) {
+                var x = groupColumns[g] !== undefined ? groupColumns[g] : (colIdx - 1) * 400;
+                var nodeList = groups[g];
+                
+                // Calculate starting Y to center the column vertically around 0
+                var totalHeight = (nodeList.length - 1) * ySpacing;
+                var startY = -totalHeight / 2;
+
+                nodeList.forEach(function(nodeId, nodeIdx) {
+                    var y = startY + (nodeIdx * ySpacing);
+                    network.moveNode(nodeId, x, y);
+                });
+            });
+
+            // Automatically fit the viewport to focus on the grid layout
+            network.fit({ animation: true });
+        });
+    </script>
+    """
+    
+    # Inject before the closing </body> tag
+    html_content = html_content.replace("</body>", f"{custom_js_ui}\n</body>")
+
+    # Write final index.html to disk
+    try:
         with open(output_html, "w", encoding="utf-8") as f:
-            f.write(html)
-            
+            f.write(html_content)
         print(f"Successfully generated map: {output_html}")
-    else:
-        print("Error: Failed to write output HTML.", file=sys.stderr)
+    except Exception as e:
+        print(f"Error writing output HTML: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
