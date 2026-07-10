@@ -72,12 +72,12 @@ def normalize_name(name):
         return "SPACEHOP", "ORB3", "Infrastructure"
     if "purplehaze" in name_lower:
         return "PurpleHaze", "", "Infrastructure"
+    if "orb28" in name_lower:
+        return "ORB28", "", "Infrastructure"
     if "florahox" in name_lower or "orb2" in name_lower:
         return "FLORAHOX", "ORB2", "Infrastructure"
     if "pakedge" in name_lower:
         return "PakEdge", "", "Infrastructure"
-    if "orb28" in name_lower:
-        return "ORB28", "", "Infrastructure"
     if "gobrat" in name_lower:
         return "GOBRAT", "", "Infrastructure"
     if "juniper infrastructure" in name_lower:
