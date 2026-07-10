@@ -15,7 +15,6 @@ This file provides a comprehensive breakdown of the hardware targeted for compro
 | Synology NAS | PolarEdge, LapDogs |
 | Juniper MX Routers | UNC3886 (running Junos OS) |
 | Fortinet Devices | Volt Typhoon / KV-botnet, UNC3886, JDY botnet |
-| Citrix NetScaler / ADC | ORB3 / SPACEHOP, MURKY PANDA |
 | Axis IP Cameras | KV-botnet, JDY botnet |
 | Buffalo AirStation | LapDogs, WrtHug |
 | Araknis Networks | ViciousTrap, JDY botnet |
