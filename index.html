@@ -1,521 +1,687 @@
-#!/usr/bin/env python3
-"""
-Project ORBITAL: Threat Actor & Infrastructure Map Generator
-Parses Adversaries.md and TargetDevices.md, builds a NetworkX graph,
-and exports an interactive PyVis visualization.
-"""
-
-import os
-import re
-import sys
-import networkx as nx
-from pyvis.network import Network
-
-
-def split_outside_parentheses(text, delimiter):
-    """
-    Splits a string by a delimiter only when that delimiter is outside of parentheses.
-    """
-    parts = []
-    current = []
-    paren_depth = 0
-    for char in text:
-        if char == '(':
-            paren_depth += 1
-        elif char == ')':
-            paren_depth -= 1
+<html>
+    <head>
+<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>
+        <meta charset="utf-8">
         
-        if char == delimiter and paren_depth == 0:
-            parts.append("".join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    if current:
-        parts.append("".join(current).strip())
-    return parts
+            <script>function neighbourhoodHighlight(params) {
+  // console.log("in nieghbourhoodhighlight");
+  allNodes = nodes.get({ returnType: "Object" });
+  // originalNodes = JSON.parse(JSON.stringify(allNodes));
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    highlightActive = true;
+    var i, j;
+    var selectedNode = params.nodes[0];
+    var degrees = 2;
 
-
-def normalize_name(name):
-    """
-    Normalizes threat actor, ORB network, and malware names to ensure graph consistency.
-    Returns: (canonical_name, aliases_str, group_type)
-    """
-    name = name.replace("**", "").strip()
-    name_lower = name.lower()
-    
-    # --- ACTORS (Threat Groups) ---
-    if "unc2630" in name_lower or "apt5" in name_lower:
-        return "UNC2630", "APT5", "Actor"
-    if "apt15" in name_lower or "ke3chang" in name_lower or "nylon typhoon" in name_lower:
-        return "APT15", "Ke3Chang, Nylon Typhoon", "Actor"
-    if "unc5174" in name_lower:
-        return "UNC5174", "", "Actor"
-    if "apt31" in name_lower or "zirconium" in name_lower or "violet" in name_lower or "judgment panda" in name_lower:
-        return "APT31", "Zirconium, Violet Typhoon, JUDGMENT PANDA", "Actor"
-    if "silk typhoon" in name_lower or "murky panda" in name_lower:
-        return "Silk Typhoon", "MURKY PANDA", "Actor"
-    if "unc3886" in name_lower:
-        return "UNC3886", "", "Actor"
-    if "volt typhoon" in name_lower or "bronze silhouette" in name_lower:
-        return "Volt Typhoon", "Bronze Silhouette", "Actor"
-    if "uat-5918" in name_lower:
-        return "UAT-5918", "", "Actor"
-    if "uat-7810" in name_lower:
-        return "UAT-7810", "", "Actor"
-    if "flax typhoon" in name_lower or "ethereal panda" in name_lower:
-        return "Flax Typhoon", "ETHEREAL PANDA", "Actor"
-    if "weaver ant" in name_lower:
-        return "Weaver Ant", "", "Actor"
-        
-    # --- INFRASTRUCTURE (ORB Networks / Clusters / Malware) ---
-    if "spacehop" in name_lower or "orb3" in name_lower:
-        return "SPACEHOP", "ORB3", "Infrastructure"
-    if "purplehaze" in name_lower:
-        return "PurpleHaze", "", "Infrastructure"
-    if "florahox" in name_lower or "orb2" in name_lower:
-        return "FLORAHOX", "ORB2", "Infrastructure"
-    if "pakedge" in name_lower:
-        return "PakEdge", "", "Infrastructure"
-    if "orb28" in name_lower:
-        return "ORB28", "", "Infrastructure"
-    if "gobrat" in name_lower:
-        return "GOBRAT", "", "Infrastructure"
-    if "juniper infrastructure" in name_lower:
-        return "Juniper Infrastructure", "", "Infrastructure"
-    if "kv-botnet" in name_lower:
-        return "KV-botnet", "", "Infrastructure"
-    if "jdy" in name_lower:
-        return "JDY botnet", "", "Infrastructure"
-    if "lapdogs" in name_lower:
-        # Extract potential parentheticals for custom aliases
-        match = re.search(r"\(([^)]+)\)", name)
-        alias = match.group(1) if match else ""
-        return "LapDogs", alias, "Infrastructure"
-    if "sparrow" in name_lower:
-        return "Sparrow", "", "Infrastructure"
-    if "unnamed orb network" in name_lower:
-        return "Unnamed ORB network", "", "Infrastructure"
-    if "wrthug" in name_lower:
-        return "WrtHug", "", "Infrastructure"
-    if "polaredge" in name_lower:
-        return "PolarEdge", "", "Infrastructure"
-    if "ayysshush" in name_lower:
-        return "AyySSHush", "", "Infrastructure"
-    if "zuorat" in name_lower:
-        return "ZuoRAT", "", "Infrastructure"
-    if "quad7" in name_lower or "fsynet" in name_lower:
-        match = re.search(r"\(([^)]+)\)", name)
-        alias = match.group(1) if match else ""
-        if "fsynet" in name_lower:
-            alias = f"FsyNet, {alias}" if alias else "FsyNet"
-        return "Quad7", alias, "Infrastructure"
-    if "vicioustrap" in name_lower:
-        return "ViciousTrap", "", "Infrastructure"
-        
-    # --- DEFAULT PARSING ---
-    match = re.match(r"^([^(]+)\s*\(([^)]+)\)", name)
-    if match:
-        main_name = match.group(1).strip()
-        alias = match.group(2).strip()
-        return main_name, alias, "Infrastructure"
-        
-    return name, "", "Infrastructure"
-
-
-def parse_markdown_table(file_path):
-    """
-    Parses a markdown table file and returns a list of rows (lists of cell contents).
-    """
-    rows = []
-    if not os.path.exists(file_path):
-        print(f"Warning: File not found: {file_path}", file=sys.stderr)
-        return rows
-        
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line.startswith("|") or not line.endswith("|"):
-                continue
-            
-            # Extract cell values
-            cells = [cell.strip() for cell in line.split("|")[1:-1]]
-            
-            # Skip separator line (| :--- | :--- |)
-            if all(all(c in ":- " for c in cell) for cell in cells if cell):
-                continue
-                
-            # Skip header line based on common header substrings
-            if any("Threat Group" in cell or "Target Appliance" in cell for cell in cells):
-                continue
-                
-            rows.append(cells)
-    return rows
-
-
-def add_or_update_node(G, node_id, **kwargs):
-    """
-    Safely adds a node or merges attributes with an existing node.
-    """
-    if G.has_node(node_id):
-        for key, val in kwargs.items():
-            if key == 'title':
-                # Merge tooltips elegantly
-                existing_title = G.nodes[node_id].get('title', '')
-                if val and val not in existing_title:
-                    if existing_title:
-                        G.nodes[node_id]['title'] = f"{existing_title}<br>{val}"
-                    else:
-                        G.nodes[node_id]['title'] = val
-            elif key == 'size':
-                G.nodes[node_id]['size'] = max(G.nodes[node_id].get('size', 0), val)
-            else:
-                G.nodes[node_id][key] = val
-    else:
-        G.add_node(node_id, **kwargs)
-
-
-def main():
-    # Resolve directory paths
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    adversaries_path = os.path.join(base_dir, "Adversaries.md")
-    targets_path = os.path.join(base_dir, "TargetDevices.md")
-    output_html = os.path.join(base_dir, "index.html")
-
-    print(f"Reading and parsing Markdown tables from '{base_dir}'...")
-    adversary_rows = parse_markdown_table(adversaries_path)
-    target_rows = parse_markdown_table(targets_path)
-
-    # Initialize Directed Graph
-    G = nx.DiGraph()
-
-    # --- PROCESS ADVERSARIES.MD ---
-    for row in adversary_rows:
-        if len(row) < 2:
-            continue
-        raw_actor, raw_orbs = row[0], row[1]
-        role_context = row[2] if len(row) > 2 else ""
-
-        # Normalize Actor
-        actor_name, actor_aliases, _ = normalize_name(raw_actor)
-        
-        # Build Actor node tooltip
-        actor_tooltip = f"<b>Threat Group:</b> {actor_name}"
-        if actor_aliases:
-            actor_tooltip += f" ({actor_aliases})"
-        if role_context:
-            # Strip markdown links from context if any
-            clean_context = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", role_context)
-            actor_tooltip += f"<br><b>Context:</b> {clean_context}"
-
-        add_or_update_node(
-            G, actor_name,
-            label=actor_name,
-            group="Actor",
-            color="#ff4757",
-            size=25,
-            title=actor_tooltip
-        )
-
-        # Normalize and split ORB networks
-        orb_parts = split_outside_parentheses(raw_orbs, ',')
-        for part in orb_parts:
-            # Handle possible nested slashes (e.g. ORB2 / FLORAHOX)
-            subparts = split_outside_parentheses(part, '/')
-            for subpart in subparts:
-                orb_name, orb_aliases, _ = normalize_name(subpart)
-                
-                orb_tooltip = f"<b>Infrastructure:</b> {orb_name}"
-                if orb_aliases:
-                    orb_tooltip += f" ({orb_aliases})"
-
-                add_or_update_node(
-                    G, orb_name,
-                    label=orb_name,
-                    group="Infrastructure",
-                    color="#54a0ff",
-                    size=20,
-                    title=orb_tooltip
-                )
-
-                # Add directed edge from Actor utilizing ORB
-                G.add_edge(
-                    actor_name, orb_name,
-                    label="utilizes",
-                    title="utilizes",
-                    color="#70a1ff",
-                    arrows="to"
-                )
-
-    # --- PROCESS TARGETDEVICES.MD ---
-    for row in target_rows:
-        if len(row) < 2:
-            continue
-        raw_target, raw_threat_infra = row[0], row[1]
-
-        target_name = raw_target.replace("**", "").strip()
-        
-        add_or_update_node(
-            G, target_name,
-            label=target_name,
-            group="Target",
-            color="#2ed573",
-            size=20,
-            title=f"<b>Target Appliance:</b> {target_name}"
-        )
-
-        # Split multiple targeters
-        targeter_parts = split_outside_parentheses(raw_threat_infra, ',')
-        for part in targeter_parts:
-            subparts = split_outside_parentheses(part, '/')
-            for subpart in subparts:
-                norm_name, norm_aliases, type_group = normalize_name(subpart)
-                
-                # Check if it was parsed as Actor or Infrastructure
-                if type_group == "Actor":
-                    color = "#ff4757"
-                    size = 25
-                    group_label = "Threat Group"
-                else:
-                    color = "#54a0ff"
-                    size = 20
-                    group_label = "Infrastructure"
-
-                tooltip = f"<b>{group_label}:</b> {norm_name}"
-                if norm_aliases:
-                    tooltip += f" ({norm_aliases})"
-
-                add_or_update_node(
-                    G, norm_name,
-                    label=norm_name,
-                    group=type_group,
-                    color=color,
-                    size=size,
-                    title=tooltip
-                )
-
-                # Connect Target to ORB/Malware ("targeted_by")
-                G.add_edge(
-                    target_name, norm_name,
-                    label="targeted_by",
-                    title="targeted_by",
-                    color="#a5b1c2",
-                    arrows="to"
-                )
-
-    print(f"Graph assembled with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
-
-    # --- PYVIS EXPORT ---
-    print("Generating PyVis Network...")
-    net = Network(
-        height="750px",
-        width="100%",
-        bgcolor="#222222",
-        font_color="white",
-        directed=True,
-        select_menu=True,
-        filter_menu=True,
-        cdn_resources='remote'
-    )
-
-    # Load NetworkX representation into PyVis
-    net.from_nx(G)
-    net.toggle_physics(True)
-
-    # Configure styling options
-    net.set_options("""
-    var options = {
-      "nodes": {
-        "font": {
-          "face": "Outfit, Inter, sans-serif",
-          "strokeWidth": 2,
-          "strokeColor": "#222222"
-        }
-      },
-      "edges": {
-        "color": {
-          "inherit": false
-        },
-        "smooth": {
-          "type": "cubicBezier",
-          "forceDirection": "horizontal",
-          "roundness": 0.5
-        },
-        "arrows": {
-          "to": {
-            "enabled": true,
-            "scaleFactor": 0.8
-          }
-        }
-      },
-      "physics": {
-        "barnesHut": {
-          "gravitationalConstant": -4000,
-          "centralGravity": 0.25,
-          "springLength": 150,
-          "springConstant": 0.04,
-          "damping": 0.09,
-          "avoidOverlap": 0.6
-        },
-        "stabilization": {
-          "enabled": true,
-          "iterations": 1000,
-          "updateInterval": 50,
-          "onlyDynamicEdges": false,
-          "fit": true
-        }
+    // mark all nodes as hard to read.
+    for (let nodeId in allNodes) {
+      // nodeColors[nodeId] = allNodes[nodeId].color;
+      allNodes[nodeId].color = "rgba(200,200,200,0.5)";
+      if (allNodes[nodeId].hiddenLabel === undefined) {
+        allNodes[nodeId].hiddenLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
       }
     }
-    """)
+    var connectedNodes = network.getConnectedNodes(selectedNode);
+    var allConnectedNodes = [];
 
-    # Write HTML file
-    # Generate HTML content in-memory
-    print("Generating HTML content...")
-    html_content = net.generate_html()
+    // get the second degree nodes
+    for (i = 1; i < degrees; i++) {
+      for (j = 0; j < connectedNodes.length; j++) {
+        allConnectedNodes = allConnectedNodes.concat(
+          network.getConnectedNodes(connectedNodes[j])
+        );
+      }
+    }
 
-    print("Applying post-processing to HTML content...")
+    // all second degree nodes get a different color and their label back
+    for (i = 0; i < allConnectedNodes.length; i++) {
+      // allNodes[allConnectedNodes[i]].color = "pink";
+      allNodes[allConnectedNodes[i]].color = "rgba(150,150,150,0.75)";
+      if (allNodes[allConnectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[allConnectedNodes[i]].label =
+          allNodes[allConnectedNodes[i]].hiddenLabel;
+        allNodes[allConnectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
 
-    # Update Title
-    html_content = re.sub(
-        r"<title>.*?</title>",
-        "<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>",
-        html_content,
-        flags=re.IGNORECASE
-    )
-    if "<title>" not in html_content:
-        html_content = html_content.replace("<head>", "<head>\n<title>Project ORBITAL: Threat Actor & Infrastructure Map</title>")
+    // all first degree nodes get their own color and their label back
+    for (i = 0; i < connectedNodes.length; i++) {
+      // allNodes[connectedNodes[i]].color = undefined;
+      allNodes[connectedNodes[i]].color = nodeColors[connectedNodes[i]];
+      if (allNodes[connectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[connectedNodes[i]].label =
+          allNodes[connectedNodes[i]].hiddenLabel;
+        allNodes[connectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
 
-    # Inject Premium Fonts & Custom Styles
-    custom_css = """
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+    // the main node gets its own color and its label back.
+    // allNodes[selectedNode].color = undefined;
+    allNodes[selectedNode].color = nodeColors[selectedNode];
+    if (allNodes[selectedNode].hiddenLabel !== undefined) {
+      allNodes[selectedNode].label = allNodes[selectedNode].hiddenLabel;
+      allNodes[selectedNode].hiddenLabel = undefined;
+    }
+  } else if (highlightActive === true) {
+    // console.log("highlightActive was true");
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      // allNodes[nodeId].color = "purple";
+      allNodes[nodeId].color = nodeColors[nodeId];
+      // delete allNodes[nodeId].color;
+      if (allNodes[nodeId].hiddenLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].hiddenLabel;
+        allNodes[nodeId].hiddenLabel = undefined;
+      }
+    }
+    highlightActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    // console.log("Nothing was selected");
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        // allNodes[nodeId].color = {};
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function filterHighlight(params) {
+  allNodes = nodes.get({ returnType: "Object" });
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    filterActive = true;
+    let selectedNodes = params.nodes;
+
+    // hiding all nodes and saving the label
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = true;
+      if (allNodes[nodeId].savedLabel === undefined) {
+        allNodes[nodeId].savedLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
+      }
+    }
+
+    for (let i=0; i < selectedNodes.length; i++) {
+      allNodes[selectedNodes[i]].hidden = false;
+      if (allNodes[selectedNodes[i]].savedLabel !== undefined) {
+        allNodes[selectedNodes[i]].label = allNodes[selectedNodes[i]].savedLabel;
+        allNodes[selectedNodes[i]].savedLabel = undefined;
+      }
+    }
+
+  } else if (filterActive === true) {
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = false;
+      if (allNodes[nodeId].savedLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].savedLabel;
+        allNodes[nodeId].savedLabel = undefined;
+      }
+    }
+    filterActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function selectNode(nodes) {
+  network.selectNodes(nodes);
+  neighbourhoodHighlight({ nodes: nodes });
+  return nodes;
+}
+
+function selectNodes(nodes) {
+  network.selectNodes(nodes);
+  filterHighlight({nodes: nodes});
+  return nodes;
+}
+
+function highlightFilter(filter) {
+  let selectedNodes = []
+  let selectedProp = filter['property']
+  if (filter['item'] === 'node') {
+    let allNodes = nodes.get({ returnType: "Object" });
+    for (let nodeId in allNodes) {
+      if (allNodes[nodeId][selectedProp] && filter['value'].includes((allNodes[nodeId][selectedProp]).toString())) {
+        selectedNodes.push(nodeId)
+      }
+    }
+  }
+  else if (filter['item'] === 'edge'){
+    let allEdges = edges.get({returnType: 'object'});
+    // check if the selected property exists for selected edge and select the nodes connected to the edge
+    for (let edge in allEdges) {
+      if (allEdges[edge][selectedProp] && filter['value'].includes((allEdges[edge][selectedProp]).toString())) {
+        selectedNodes.push(allEdges[edge]['from'])
+        selectedNodes.push(allEdges[edge]['to'])
+      }
+    }
+  }
+  selectNodes(selectedNodes)
+}</script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+            
+            
+            
+            
+            
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tom-select/2.0.0-rc.4/css/tom-select.min.css" integrity="sha512-43fHB3GLgZfz8QXl1RPQ8O66oIgv3po9cJ5erMt1c4QISq9dYb195T3vr5ImnJPXuVroKcGBPXBFKETW8jrPNQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/tom-select/2.0.0-rc.4/js/tom-select.complete.js" integrity="sha512-jeF9CfnvzDiw9G9xiksVjxR2lib44Gnovvkv+3CgCG6NXCD4gqlA5nDAVW5WjpA+i+/zKsUWV5xNEbW1X/HH0Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+
         
-        body {
-            font-family: 'Outfit', 'Segoe UI', sans-serif !important;
-            background-color: #222222 !important;
-        }
-        
-        div.vis-tooltip {
-            background-color: rgba(30, 30, 30, 0.95) !important;
-            border: 1px solid #444444 !important;
-            color: #ffffff !important;
-            font-family: 'Outfit', sans-serif !important;
-            font-size: 13px !important;
-            padding: 12px 16px !important;
-            border-radius: 8px !important;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
-            max-width: 350px !important;
-            line-height: 1.5 !important;
-        }
-        
-        select, input, button {
-            background-color: #2d2d2d !important;
-            border: 1px solid #444 !important;
-            color: #fff !important;
-            border-radius: 4px !important;
-            padding: 6px 12px !important;
-            font-family: 'Outfit', sans-serif !important;
-        }
-        
-        select:focus, input:focus {
-            border-color: #54a0ff !important;
-            outline: none !important;
-        }
-        
-        .vis-configuration-wrapper {
-            background-color: #222222 !important;
-            color: #ffffff !important;
-        }
-    </style>
-    """
-    html_content = html_content.replace("</head>", f"{custom_css}\n</head>")
+<center>
+<h1></h1>
+</center>
 
-    # Custom Grid Layout Button and JavaScript
-    custom_js_ui = """
-    <button id="gridLayoutButton">Grid Layout</button>
-    <style>
-        #gridLayoutButton {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 999;
-            background-color: #ff4757;
-            color: white;
-            border-radius: 5px;
-            font-weight: bold;
-            cursor: pointer;
-            border: none;
-            padding: 10px 15px;
-            font-family: 'Outfit', sans-serif;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-            transition: background-color 0.2s, transform 0.1s;
-        }
-        #gridLayoutButton:hover {
-            background-color: #ff6b81;
-            transform: translateY(-1px);
-        }
-        #gridLayoutButton:active {
-            background-color: #e2283e;
-            transform: translateY(1px);
-        }
-    </style>
-    <script type="text/javascript">
-        document.getElementById('gridLayoutButton').addEventListener('click', function() {
-            // Temporarily disable the PyVis network physics
-            network.setOptions({ physics: { enabled: false } });
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
 
-            // Extract all node data
-            var allNodes = nodes.get(nodes.getIds());
 
-            // Group the nodes by their group attribute
-            var groups = {};
-            allNodes.forEach(function(node) {
-                var g = node.group || 'default';
-                if (!groups[g]) {
-                    groups[g] = [];
-                }
-                groups[g].push(node.id);
-            });
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
 
-            // Arrange the groups into distinct horizontal columns
-            var groupColumns = {
-                'Actor': -400,
-                'Infrastructure': 0,
-                'Target': 400
-            };
+             #mynetwork {
+                 width: 100%;
+                 height: 750px;
+                 background-color: #222222;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
 
-            var ySpacing = 80;
+             
 
-            Object.keys(groups).forEach(function(g, colIdx) {
-                var x = groupColumns[g] !== undefined ? groupColumns[g] : (colIdx - 1) * 400;
-                var nodeList = groups[g];
-                
-                // Calculate starting Y to center the column vertically around 0
-                var totalHeight = (nodeList.length - 1) * ySpacing;
-                var startY = -totalHeight / 2;
+             
 
-                nodeList.forEach(function(nodeId, nodeIdx) {
-                    var y = startY + (nodeIdx * ySpacing);
-                    network.moveNode(nodeId, x, y);
-                });
-            });
-
-            // Automatically fit the viewport to focus on the grid layout
-            network.fit({ animation: true });
-        });
-    </script>
-    """
+             
+        </style>
     
-    # Inject before the closing </body> tag
-    html_content = html_content.replace("</body>", f"{custom_js_ui}\n</body>")
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+            
+            body {
+                font-family: 'Outfit', 'Segoe UI', sans-serif !important;
+                background-color: #222222 !important;
+            }
+            
+            div.vis-tooltip {
+                background-color: rgba(30, 30, 30, 0.95) !important;
+                border: 1px solid #444444 !important;
+                color: #ffffff !important;
+                font-family: 'Outfit', sans-serif !important;
+                font-size: 13px !important;
+                padding: 12px 16px !important;
+                border-radius: 8px !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+                max-width: 350px !important;
+                line-height: 1.5 !important;
+            }
+            
+            select, input, button {
+                background-color: #2d2d2d !important;
+                border: 1px solid #444 !important;
+                color: #fff !important;
+                border-radius: 4px !important;
+                padding: 6px 12px !important;
+                font-family: 'Outfit', sans-serif !important;
+            }
+            
+            select:focus, input:focus {
+                border-color: #54a0ff !important;
+                outline: none !important;
+            }
+            
+            .vis-configuration-wrapper {
+                background-color: #222222 !important;
+                color: #ffffff !important;
+            }
+        </style>
+        
+</head>
 
-    # Write final index.html to disk
-    try:
-        with open(output_html, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"Successfully generated map: {output_html}")
-    except Exception as e:
-        print(f"Error writing output HTML: {e}", file=sys.stderr)
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+                <div id="select-menu" class="card-header">
+                    <div class="row no-gutters">
+                        <div class="col-10 pb-2">
+                            <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="selectNode([value]);"
+                            id="select-node"
+                            placeholder="Select node..."
+                            >
+                                <option selected>Select a Node by ID</option>
+                                
+                                    <option value="UNC2630">UNC2630</option>
+                                
+                                    <option value="SPACEHOP">SPACEHOP</option>
+                                
+                                    <option value="APT15">APT15</option>
+                                
+                                    <option value="PurpleHaze">PurpleHaze</option>
+                                
+                                    <option value="UNC5174">UNC5174</option>
+                                
+                                    <option value="APT31">APT31</option>
+                                
+                                    <option value="FLORAHOX">FLORAHOX</option>
+                                
+                                    <option value="PakEdge">PakEdge</option>
+                                
+                                    <option value="Silk Typhoon">Silk Typhoon</option>
+                                
+                                    <option value="UNC3886">UNC3886</option>
+                                
+                                    <option value="GOBRAT">GOBRAT</option>
+                                
+                                    <option value="Juniper Infrastructure">Juniper Infrastructure</option>
+                                
+                                    <option value="Volt Typhoon">Volt Typhoon</option>
+                                
+                                    <option value="KV-botnet">KV-botnet</option>
+                                
+                                    <option value="JDY botnet">JDY botnet</option>
+                                
+                                    <option value="UAT-5918">UAT-5918</option>
+                                
+                                    <option value="LapDogs">LapDogs</option>
+                                
+                                    <option value="UAT-7810">UAT-7810</option>
+                                
+                                    <option value="Flax Typhoon">Flax Typhoon</option>
+                                
+                                    <option value="Sparrow">Sparrow</option>
+                                
+                                    <option value="Weaver Ant">Weaver Ant</option>
+                                
+                                    <option value="Unnamed ORB network">Unnamed ORB network</option>
+                                
+                                    <option value="ASUS Routers">ASUS Routers</option>
+                                
+                                    <option value="WrtHug">WrtHug</option>
+                                
+                                    <option value="PolarEdge">PolarEdge</option>
+                                
+                                    <option value="AyySSHush">AyySSHush</option>
+                                
+                                    <option value="ZuoRAT">ZuoRAT</option>
+                                
+                                    <option value="Quad7">Quad7</option>
+                                
+                                    <option value="ViciousTrap">ViciousTrap</option>
+                                
+                                    <option value="Cisco RV Series">Cisco RV Series</option>
+                                
+                                    <option value="SecurityScorecard Research">SecurityScorecard Research</option>
+                                
+                                    <option value="DrayTek Vigor">DrayTek Vigor</option>
+                                
+                                    <option value="NETGEAR / ProSAFE">NETGEAR / ProSAFE</option>
+                                
+                                    <option value="TP-Link Routers">TP-Link Routers</option>
+                                
+                                    <option value="Ruckus Wireless">Ruckus Wireless</option>
+                                
+                                    <option value="D-Link Routers">D-Link Routers</option>
+                                
+                                    <option value="QNAP NAS">QNAP NAS</option>
+                                
+                                    <option value="Synology NAS">Synology NAS</option>
+                                
+                                    <option value="Juniper MX Routers">Juniper MX Routers</option>
+                                
+                                    <option value="Fortinet Devices">Fortinet Devices</option>
+                                
+                                    <option value="Citrix NetScaler / ADC">Citrix NetScaler / ADC</option>
+                                
+                                    <option value="Axis IP Cameras">Axis IP Cameras</option>
+                                
+                                    <option value="Buffalo AirStation">Buffalo AirStation</option>
+                                
+                                    <option value="Araknis Networks">Araknis Networks</option>
+                                
+                                    <option value="Linksys / LRT224">Linksys / LRT224</option>
+                                
+                                    <option value="JCG-Q20 Routers">JCG-Q20 Routers</option>
+                                
+                                    <option value="Axentra NAS">Axentra NAS</option>
+                                
+                                    <option value="Zyxel VPNs">Zyxel VPNs</option>
+                                
+                                    <option value="Hikvision Cameras">Hikvision Cameras</option>
+                                
+                                    <option value="Mimosa Networks">Mimosa Networks</option>
+                                
+                                    <option value="Ubiquiti Devices">Ubiquiti Devices</option>
+                                
+                                    <option value="VMware Systems">VMware Systems</option>
+                                
+                                    <option value="Panasonic Webcams">Panasonic Webcams</option>
+                                
+                                    <option value="Microsoft Servers / XP">Microsoft Servers / XP</option>
+                                
+                                    <option value="Cross DVRs">Cross DVRs</option>
+                                
+                                    <option value="Pakedge Routers">Pakedge Routers</option>
+                                
+                                    <option value="CyberOAM Appliances">CyberOAM Appliances</option>
+                                
+                                    <option value="BMC Controllers">BMC Controllers</option>
+                                
+                                    <option value="Zyxel CPE Routers">Zyxel CPE Routers</option>
+                                
+                                    <option value="Ruckus Wireless Routers">Ruckus Wireless Routers</option>
+                                
+                                    <option value="ASUS AiCloud Routers">ASUS AiCloud Routers</option>
+                                
+                            </select>
+                        </div>
+                        <div class="col-2 pb-2">
+                            <button type="button" class="btn btn-primary btn-block" onclick="neighbourhoodHighlight({nodes: []});">Reset Selection</button>
+                        </div>
+                    </div>
+                </div>
+            
+            
+              <div id="filter-menu" class="card-header">
+                <div class="row no-gutters">
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="updateFilter(value, 'item')"
+                            id="select-item"
+                        >
+                        <option value="">Select a network item</option>
+                        <option value="edge">edge</option>
+                        <option value="node">node</option>
+                    </select>
+                  </div>
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            onchange="updateFilter(value, 'property')"
+                            id="select-property"
+                        >
+                        <option value="">Select a property...</option>
+                    </select>
+                  </div>
+                  <div class="col-3 pb-2">
+                    <select
+                            class="form-select"
+                            aria-label="Default select example"
+                            id="select-value"
+                        >
+                        <option value="">Select value(s)...</option>
+                    </select>
+                  </div>
+                  <div class="col-1 pb-2">
+                    <button type="button" class="btn btn-primary btn-block" onclick="highlightFilter(filter);">Filter</button>
+                  </div>
+                  <div class="col-2 pb-2">
+                    <button type="button" class="btn btn-primary btn-block" onclick="clearFilter(true)">Reset Selection</button>
+                  </div>
+                </div>
+              </div>
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+                  new TomSelect("#select-node",{
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      }
+                  });
+              
+
+              
+                  // explicitly using onItemAdd and this function as we need to save multiple values
+                  let updateValueFilter = function() {
+                      return function () {
+                      filter['value'].push(arguments[0])
+                      }
+                  }
+
+                  let valueControl = new TomSelect("#select-value",{
+                      maxItems: null,
+                      valueField: 'id',
+                      labelField: 'title',
+                      searchField: 'title',
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: updateValueFilter()
+                  });
+
+                  let addValues = function() {
+                      return function () {
+                          // clear the current value options and add the selected attribute values
+                          // tom-select handles duplicates
+                          let selectedProperty = arguments[0];
+                          valueControl.clear();
+                          valueControl.clearOptions();
+                          filter['value'] = []
+                          if (filter['item'] === 'node') {
+                              for (let each in allNodes) {
+                                  valueControl.addOption({
+                                      id:allNodes[each][selectedProperty],
+                                      title:allNodes[each][selectedProperty]
+                                  })
+                              }
+                          }
+                          else if (filter['item'] === 'edge') {
+                              for (let each in allEdges) {
+                                  valueControl.addOption({
+                                      id:allEdges[each][selectedProperty],
+                                      title:allEdges[each][selectedProperty]
+                                  })
+                              }
+                          }
+                      }
+                  };
+
+                  let propControl = new TomSelect("#select-property",{
+                      valueField: 'id',
+                      labelField: 'title',
+                      searchField: 'title',
+                      create: false,
+                      sortField: {
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: addValues()
+                  });
+
+                  let addProperties = function() {
+                      return function () {
+                          // loops through the selected network item and adds the attributes to dropdown
+                          // tom-select handles duplicates
+                          clearFilter(false)
+                          if (arguments[0] === 'edge') {
+                              for (let each in allEdges) {
+                                  if (allEdges.hasOwnProperty(each)) {
+                                      for (let eachProp in allEdges[each]) {
+                                          if (allEdges[each].hasOwnProperty(eachProp)) {
+                                              propControl.addOption({id: eachProp, title: eachProp})
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                          else if (arguments[0] === 'node') {
+                              for (let each in allNodes) {
+                                  if (allNodes.hasOwnProperty(each)) {
+                                      for (let eachProp in allNodes[each]) {
+                                          if (allNodes[each].hasOwnProperty(eachProp)
+                                              && (eachProp !== 'hidden' && eachProp !== 'savedLabel'
+                                                  && eachProp !== 'hiddenLabel')) {
+                                              propControl.addOption({id: eachProp, title: eachProp})
+
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  };
+
+                  let itemControl = new TomSelect("#select-item",{
+                      create: false,
+                      sortField:{
+                          field: "text",
+                          direction: "asc"
+                      },
+                      onItemAdd: addProperties()
+                  });
+
+                  function clearFilter(reset) {
+                      // utility function to clear all the selected filter options
+                      // if reset is set to true, the existing filter will be removed
+                      // else, only the dropdown options are cleared
+                      propControl.clear();
+                      propControl.clearOptions();
+                      valueControl.clear();
+                      valueControl.clearOptions();
+                      filter = {
+                          item : '',
+                          property : '',
+                          value : []
+                      }
+                      if (reset) {
+                          itemControl.clear();
+                          filterHighlight({nodes: []})
+                      }
+                  }
+
+                  function updateFilter(value, key) {
+                      // key could be 'item' or 'property' and value is as selected in dropdown
+                      filter[key] = value
+                  }
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"font": {"color": "white"}, "group": "Actor", "id": "UNC2630", "label": "UNC2630", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e UNC2630 (APT5)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A cluster with suspected links to APT5 that used SPACEHOP nodes to exploit vulnerabilities like CVE-2022-27518 in Citrix ADC and Citrix Gateway for initial access."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "SPACEHOP", "label": "SPACEHOP", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e SPACEHOP (ORB3)"}, {"font": {"color": "white"}, "group": "Actor", "id": "APT15", "label": "APT15", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e APT15 (Ke3Chang, Nylon Typhoon)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A China-nexus threat actor that leases access to the SPACEHOP provisioned VPS network to conduct reconnaissance and exploitation.\u003cbr\u003e\u003cb\u003eThreat Group:\u003c/b\u003e APT15 (Ke3Chang, Nylon Typhoon)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e SentinelOne tracks the PurpleHaze network as an infrastructure cluster operated from China and actively shared among several suspected Chinese cyberespionage actors."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "PurpleHaze", "label": "PurpleHaze", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e PurpleHaze"}, {"font": {"color": "white"}, "group": "Actor", "id": "UNC5174", "label": "UNC5174", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e UNC5174\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e UNC5174 is a suspected Chinese MSS contractor and initial access broker; specializes in rapid vulnerability weaponization."}, {"font": {"color": "white"}, "group": "Actor", "id": "APT31", "label": "APT31", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e APT31 (Zirconium, Violet Typhoon, JUDGMENT PANDA)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e Suspected MSS contractors who have utilized a vast mesh of compromised SOHO routers for operational infrastructure since at least 2019."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "FLORAHOX", "label": "FLORAHOX", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e FLORAHOX (ORB2)"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "PakEdge", "label": "PakEdge", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e PakEdge"}, {"font": {"color": "white"}, "group": "Actor", "id": "Silk Typhoon", "label": "Silk Typhoon", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e Silk Typhoon (MURKY PANDA)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A China-nexus adversary whose activities align with MURKY PANDA, focusing on intelligence collection through advanced cloud-conscious tradecraft. They focused on targeting Microsoft 365 accounts."}, {"font": {"color": "white"}, "group": "Actor", "id": "UNC3886", "label": "UNC3886", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e UNC3886\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A highly adept China-nexus group that utilizes GOBRAT staging nodes as part of its operations to maintain stealthy access to telecommunications and internal networks."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "GOBRAT", "label": "GOBRAT", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e GOBRAT"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "Juniper Infrastructure", "label": "Juniper Infrastructure", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e Juniper Infrastructure"}, {"font": {"color": "white"}, "group": "Actor", "id": "Volt Typhoon", "label": "Volt Typhoon", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e Volt Typhoon (Bronze Silhouette)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A state-sponsored actor based in China that uses these clusters for surreptitious tunnels and reconnaissance scanning targeting critical infrastructure."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "KV-botnet", "label": "KV-botnet", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e KV-botnet"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "JDY botnet", "label": "JDY botnet", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e JDY botnet"}, {"font": {"color": "white"}, "group": "Actor", "id": "UAT-5918", "label": "UAT-5918", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e UAT-5918\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A China-nexus espionage actor assessed to have used the LapDogs ORB at least once in its operations targeting critical infrastructure in Taiwan."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "LapDogs", "label": "LapDogs", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e LapDogs\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e LapDogs (WRPD)"}, {"font": {"color": "white"}, "group": "Actor", "id": "UAT-7810", "label": "UAT-7810", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e UAT-7810\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e The China-nexus threat actor responsible for LapDogs, who is tasked with establishing Operational Relay Box (ORB) networks that can then be leveraged by associated secondary threat actors to conduct their own malicious attacks against high value targets."}, {"font": {"color": "white"}, "group": "Actor", "id": "Flax Typhoon", "label": "Flax Typhoon", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e Flax Typhoon (ETHEREAL PANDA)\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e A massive network of over 260,000 compromised devices managed by the PRC-based Integrity Technology Group using a custom application called \"Sparrow\" to facilitate DDoS attacks and cyber espionage operations"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "Sparrow", "label": "Sparrow", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e Sparrow"}, {"font": {"color": "white"}, "group": "Actor", "id": "Weaver Ant", "label": "Weaver Ant", "shape": "dot", "size": 25, "title": "\u003cb\u003eThreat Group:\u003c/b\u003e Weaver Ant\u003cbr\u003e\u003cb\u003eContext:\u003c/b\u003e Compromises Zyxel routers operated by SE Asian telecoms to proxy traffic and pivot between different providers to conceal infrastructure."}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "Unnamed ORB network", "label": "Unnamed ORB network", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e Unnamed ORB network"}, {"font": {"color": "white"}, "group": "Target", "id": "ASUS Routers", "label": "ASUS Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e ASUS Routers"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "WrtHug", "label": "WrtHug", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e WrtHug"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "PolarEdge", "label": "PolarEdge", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e PolarEdge"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "AyySSHush", "label": "AyySSHush", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e AyySSHush"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "ZuoRAT", "label": "ZuoRAT", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e ZuoRAT"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "Quad7", "label": "Quad7", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (alogin/UPDTAE)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (R7000/Netd)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (xlogin/WR841N)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (FsyNet, rlogin)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (Netd/DIR-610)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (axlogin / UPDTAE)\u003cbr\u003e\u003cb\u003eInfrastructure:\u003c/b\u003e Quad7 (zylogin)"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "ViciousTrap", "label": "ViciousTrap", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e ViciousTrap"}, {"font": {"color": "white"}, "group": "Target", "id": "Cisco RV Series", "label": "Cisco RV Series", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Cisco RV Series"}, {"font": {"color": "white"}, "group": "Infrastructure", "id": "SecurityScorecard Research", "label": "SecurityScorecard Research", "shape": "dot", "size": 20, "title": "\u003cb\u003eInfrastructure:\u003c/b\u003e SecurityScorecard Research"}, {"font": {"color": "white"}, "group": "Target", "id": "DrayTek Vigor", "label": "DrayTek Vigor", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e DrayTek Vigor"}, {"font": {"color": "white"}, "group": "Target", "id": "NETGEAR / ProSAFE", "label": "NETGEAR / ProSAFE", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e NETGEAR / ProSAFE"}, {"font": {"color": "white"}, "group": "Target", "id": "TP-Link Routers", "label": "TP-Link Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e TP-Link Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "Ruckus Wireless", "label": "Ruckus Wireless", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Ruckus Wireless"}, {"font": {"color": "white"}, "group": "Target", "id": "D-Link Routers", "label": "D-Link Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e D-Link Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "QNAP NAS", "label": "QNAP NAS", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e QNAP NAS"}, {"font": {"color": "white"}, "group": "Target", "id": "Synology NAS", "label": "Synology NAS", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Synology NAS"}, {"font": {"color": "white"}, "group": "Target", "id": "Juniper MX Routers", "label": "Juniper MX Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Juniper MX Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "Fortinet Devices", "label": "Fortinet Devices", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Fortinet Devices"}, {"font": {"color": "white"}, "group": "Target", "id": "Citrix NetScaler / ADC", "label": "Citrix NetScaler / ADC", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Citrix NetScaler / ADC"}, {"font": {"color": "white"}, "group": "Target", "id": "Axis IP Cameras", "label": "Axis IP Cameras", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Axis IP Cameras"}, {"font": {"color": "white"}, "group": "Target", "id": "Buffalo AirStation", "label": "Buffalo AirStation", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Buffalo AirStation"}, {"font": {"color": "white"}, "group": "Target", "id": "Araknis Networks", "label": "Araknis Networks", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Araknis Networks"}, {"font": {"color": "white"}, "group": "Target", "id": "Linksys / LRT224", "label": "Linksys / LRT224", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Linksys / LRT224"}, {"font": {"color": "white"}, "group": "Target", "id": "JCG-Q20 Routers", "label": "JCG-Q20 Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e JCG-Q20 Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "Axentra NAS", "label": "Axentra NAS", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Axentra NAS"}, {"font": {"color": "white"}, "group": "Target", "id": "Zyxel VPNs", "label": "Zyxel VPNs", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Zyxel VPNs"}, {"font": {"color": "white"}, "group": "Target", "id": "Hikvision Cameras", "label": "Hikvision Cameras", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Hikvision Cameras"}, {"font": {"color": "white"}, "group": "Target", "id": "Mimosa Networks", "label": "Mimosa Networks", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Mimosa Networks"}, {"font": {"color": "white"}, "group": "Target", "id": "Ubiquiti Devices", "label": "Ubiquiti Devices", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Ubiquiti Devices"}, {"font": {"color": "white"}, "group": "Target", "id": "VMware Systems", "label": "VMware Systems", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e VMware Systems"}, {"font": {"color": "white"}, "group": "Target", "id": "Panasonic Webcams", "label": "Panasonic Webcams", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Panasonic Webcams"}, {"font": {"color": "white"}, "group": "Target", "id": "Microsoft Servers / XP", "label": "Microsoft Servers / XP", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Microsoft Servers / XP"}, {"font": {"color": "white"}, "group": "Target", "id": "Cross DVRs", "label": "Cross DVRs", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Cross DVRs"}, {"font": {"color": "white"}, "group": "Target", "id": "Pakedge Routers", "label": "Pakedge Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Pakedge Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "CyberOAM Appliances", "label": "CyberOAM Appliances", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e CyberOAM Appliances"}, {"font": {"color": "white"}, "group": "Target", "id": "BMC Controllers", "label": "BMC Controllers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e BMC Controllers"}, {"font": {"color": "white"}, "group": "Target", "id": "Zyxel CPE Routers", "label": "Zyxel CPE Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Zyxel CPE Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "Ruckus Wireless Routers", "label": "Ruckus Wireless Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e Ruckus Wireless Routers"}, {"font": {"color": "white"}, "group": "Target", "id": "ASUS AiCloud Routers", "label": "ASUS AiCloud Routers", "shape": "dot", "size": 20, "title": "\u003cb\u003eTarget Appliance:\u003c/b\u003e ASUS AiCloud Routers"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "color": "#70a1ff", "from": "UNC2630", "label": "utilizes", "title": "utilizes", "to": "SPACEHOP", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "APT15", "label": "utilizes", "title": "utilizes", "to": "SPACEHOP", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "APT15", "label": "utilizes", "title": "utilizes", "to": "PurpleHaze", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "UNC5174", "label": "utilizes", "title": "utilizes", "to": "PurpleHaze", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "APT31", "label": "utilizes", "title": "utilizes", "to": "FLORAHOX", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "APT31", "label": "utilizes", "title": "utilizes", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "Silk Typhoon", "label": "utilizes", "title": "utilizes", "to": "FLORAHOX", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "UNC3886", "label": "utilizes", "title": "utilizes", "to": "GOBRAT", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "UNC3886", "label": "utilizes", "title": "utilizes", "to": "Juniper Infrastructure", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "Volt Typhoon", "label": "utilizes", "title": "utilizes", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "Volt Typhoon", "label": "utilizes", "title": "utilizes", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "UAT-5918", "label": "utilizes", "title": "utilizes", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "UAT-7810", "label": "utilizes", "title": "utilizes", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "Flax Typhoon", "label": "utilizes", "title": "utilizes", "to": "Sparrow", "width": 1}, {"arrows": "to", "color": "#70a1ff", "from": "Weaver Ant", "label": "utilizes", "title": "utilizes", "to": "Unnamed ORB network", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "WrtHug", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "PolarEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "AyySSHush", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "ZuoRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "FLORAHOX", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS Routers", "label": "targeted_by", "title": "targeted_by", "to": "GOBRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "PolarEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "ZuoRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cisco RV Series", "label": "targeted_by", "title": "targeted_by", "to": "SecurityScorecard Research", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "DrayTek Vigor", "label": "targeted_by", "title": "targeted_by", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "DrayTek Vigor", "label": "targeted_by", "title": "targeted_by", "to": "ZuoRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "DrayTek Vigor", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "DrayTek Vigor", "label": "targeted_by", "title": "targeted_by", "to": "FLORAHOX", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "DrayTek Vigor", "label": "targeted_by", "title": "targeted_by", "to": "GOBRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "NETGEAR / ProSAFE", "label": "targeted_by", "title": "targeted_by", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "NETGEAR / ProSAFE", "label": "targeted_by", "title": "targeted_by", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "NETGEAR / ProSAFE", "label": "targeted_by", "title": "targeted_by", "to": "APT31", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "NETGEAR / ProSAFE", "label": "targeted_by", "title": "targeted_by", "to": "ZuoRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "NETGEAR / ProSAFE", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "TP-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "TP-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "TP-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "APT31", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "TP-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "GOBRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Ruckus Wireless", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Ruckus Wireless", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "APT31", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "D-Link Routers", "label": "targeted_by", "title": "targeted_by", "to": "UNC3886", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "QNAP NAS", "label": "targeted_by", "title": "targeted_by", "to": "PolarEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "QNAP NAS", "label": "targeted_by", "title": "targeted_by", "to": "GOBRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "QNAP NAS", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Synology NAS", "label": "targeted_by", "title": "targeted_by", "to": "PolarEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Synology NAS", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Juniper MX Routers", "label": "targeted_by", "title": "targeted_by", "to": "UNC3886", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Fortinet Devices", "label": "targeted_by", "title": "targeted_by", "to": "Volt Typhoon", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Fortinet Devices", "label": "targeted_by", "title": "targeted_by", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Fortinet Devices", "label": "targeted_by", "title": "targeted_by", "to": "UNC3886", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Fortinet Devices", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Citrix NetScaler / ADC", "label": "targeted_by", "title": "targeted_by", "to": "SPACEHOP", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Citrix NetScaler / ADC", "label": "targeted_by", "title": "targeted_by", "to": "Silk Typhoon", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Axis IP Cameras", "label": "targeted_by", "title": "targeted_by", "to": "KV-botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Axis IP Cameras", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Buffalo AirStation", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Buffalo AirStation", "label": "targeted_by", "title": "targeted_by", "to": "WrtHug", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Araknis Networks", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Araknis Networks", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Linksys / LRT224", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Linksys / LRT224", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Linksys / LRT224", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "JCG-Q20 Routers", "label": "targeted_by", "title": "targeted_by", "to": "ZuoRAT", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Axentra NAS", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Zyxel VPNs", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Hikvision Cameras", "label": "targeted_by", "title": "targeted_by", "to": "Quad7", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Hikvision Cameras", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Mimosa Networks", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Ubiquiti Devices", "label": "targeted_by", "title": "targeted_by", "to": "JDY botnet", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "VMware Systems", "label": "targeted_by", "title": "targeted_by", "to": "UNC3886", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Panasonic Webcams", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Microsoft Servers / XP", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cross DVRs", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Cross DVRs", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Pakedge Routers", "label": "targeted_by", "title": "targeted_by", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Pakedge Routers", "label": "targeted_by", "title": "targeted_by", "to": "APT31", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "CyberOAM Appliances", "label": "targeted_by", "title": "targeted_by", "to": "PakEdge", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "CyberOAM Appliances", "label": "targeted_by", "title": "targeted_by", "to": "APT31", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "BMC Controllers", "label": "targeted_by", "title": "targeted_by", "to": "ViciousTrap", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Zyxel CPE Routers", "label": "targeted_by", "title": "targeted_by", "to": "Weaver Ant", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Ruckus Wireless Routers", "label": "targeted_by", "title": "targeted_by", "to": "UAT-7810", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "Ruckus Wireless Routers", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS AiCloud Routers", "label": "targeted_by", "title": "targeted_by", "to": "UAT-7810", "width": 1}, {"arrows": "to", "color": "#a5b1c2", "from": "ASUS AiCloud Routers", "label": "targeted_by", "title": "targeted_by", "to": "LapDogs", "width": 1}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"nodes": {"font": {"face": "Outfit,Inter,sans-serif", "strokeWidth": 2, "strokeColor": "#222222"}}, "edges": {"color": {"inherit": false}, "smooth": {"type": "cubicBezier", "forceDirection": "horizontal", "roundness": 0.5}, "arrows": {"to": {"enabled": true, "scaleFactor": 0.8}}}, "physics": {"barnesHut": {"gravitationalConstant": -4000, "centralGravity": 0.25, "springLength": 150, "springConstant": 0.04, "damping": 0.09, "avoidOverlap": 0.6}, "stabilization": {"enabled": true, "iterations": 1000, "updateInterval": 50, "onlyDynamicEdges": false, "fit": true}}};
+
+                  
 
 
-if __name__ == "__main__":
-    main()
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+                    network.on("selectNode", neighbourhoodHighlight);
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
