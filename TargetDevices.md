@@ -5,7 +5,7 @@ This file provides a comprehensive breakdown of the hardware targeted for compro
 | Target Appliance / Brand | ORB Clusters / Malware Targeting Device |
 | :--- | :--- |
 | ASUS Routers | WrtHug, PolarEdge, AyySSHush, ZuoRAT, Quad7 (alogin/UPDTAE), ViciousTrap, ORB2 / FLORAHOX, GobRAT |
-| Cisco RV Series | PolarEdge, KV-botnet / JDY, ZuoRAT, ViciousTrap, SecurityScorecard Research |
+| Cisco RV Series | PolarEdge, KV-botnet / JDY, ZuoRAT, ViciousTrap |
 | DrayTek Vigor | KV-botnet, ZuoRAT, JDY botnet, ORB2 / FLORAHOX, GobRAT |
 | NETGEAR / ProSAFE | KV-botnet, Pakedge Infrastructure / APT31, ZuoRAT, Quad7 (R7000/Netd) |
 | TP-Link Routers | Quad7 (xlogin/WR841N), Pakedge Infrastructure / APT31, GobRAT |
