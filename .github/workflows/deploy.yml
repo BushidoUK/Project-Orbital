@@ -1,0 +1,60 @@
+name: Deploy Threat Graph
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install networkx pyvis
+
+      - name: Generate Threat Graph
+        run: |
+          if [ -f "build_graph.py" ]; then
+            python build_graph.py
+          elif [ -f "Project-Orbital-main/build_graph.py" ]; then
+            python Project-Orbital-main/build_graph.py
+          else
+            echo "Error: build_graph.py not found in root or Project-Orbital-main/"
+            exit 1
+          fi
+
+      - name: Commit and Push index.html
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Find index.html anywhere in the workspace
+          HTML_PATH=$(find . -name "index.html" | head -n 1)
+          
+          if [ -n "$HTML_PATH" ]; then
+            if [ -n "$(git status --porcelain "$HTML_PATH")" ]; then
+              echo "Changes detected in $HTML_PATH. Committing..."
+              git add "$HTML_PATH"
+              git commit -m "Automated Graph Update [skip ci]"
+              git push
+            else
+              echo "No changes detected in $HTML_PATH."
+            fi
+          else
+            echo "Error: index.html was not generated."
+            exit 1
+          fi
