@@ -48,3 +48,14 @@ Banners and specific port assignments provide behavioral fingerprints for automa
 | **ZuoRAT** | `48101` | Mutex listener (ensures single execution). | [Lumen](https://www.lumen.com/blog/en-us/zuorat-hijacks-soho-routers-silently-stalk-networks) |
 | **Silk Typhoon** (MURKY PANDA) | `34125` | Upstream management servers used by botnet administrators. | [media.defense.gov](https://media.defense.gov/2024/Sep/18/2003547016/-1/-1/0/CSA-PRC-LINKED-ACTORS-BOTNET.PDF)  |
 | **UAT-7810** (LapDogs) | `99 (TCP)` | TLS server used for payload distribution. | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **GOREshell (C2)** | `443 (TCP)` | **WebSocket protocol** (`wss://`) for C2 communication. | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
+| **PurpleHaze Management**| `443 (TCP)` | Observed probes for system information enumeration. | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
+
+---
+
+#### **Table 4: SSH Host Key Fingerprints**
+An SSH Host Key is a cryptographic signature used to uniquely identify a specific server, which allows security researchers to track and link separate malware samples or infrastructure back to the exact same threat actor when that identical key fingerprint shows up.
+
+| Cluster / Malware | Description | Hash / Thumbprint | Source |
+| :--- | :--- | :--- | :--- |
+| **PurpleHaze / GOREshell** | Unique private SSH key embedded in malware. | **SSH Host Key SHA256:** `f0746e78e49896dfa01c674bf2a800443b1966c54663db5c679bc86533352590` | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
