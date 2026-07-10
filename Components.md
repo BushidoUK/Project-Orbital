@@ -21,3 +21,6 @@ This file details the publicly available software, communication protocols, and 
 | [**Boost.Asio**](https://www.boost.org/doc/libs/latest/doc/html/boost_asio.html) | Asynchronous network library. | **UAT-7810** | Used to build the LONGLEASH variant for MIPS to minimize blocking and maximize performance. |
 | [**Nanopb**](https://jpa.kapsi.fi/nanopb/) | Protobuf library for C. | **UAT-7810** | Contained within LONGLEASH for processing protocol buffer encoded messages. | 
 | [**musl libc**](https://musl.libc.org/) | C standard library. | **UAT-7810** | Used by LONGLEASH to implement C functions directly on top of Linux syscalls. | 
+| [**reverse_ssh**](https://github.com/NHAS/reverse_ssh) | SSH-based backdoor. | **PurpleHaze** | Foundation for the **GOREshell** malware cluster; provides persistent remote access. | 
+| [**dsniff (2.5a1)**](https://github.com/hackerschoice/dsniff) | Network auditing/intercept. | **PurpleHaze** | Modernized version from **The Hacker’s Choice (THC)** used for traffic auditing and MitM. |
+| [**clear13 (mcl)**](https://github.com/hackerschoice/THC-Archive/tree/master/Tools) | Log cleaning utility. | **PurpleHaze** | Compiled as `mcl` to remove forensic traces from Linux logs (`wtmp`, `utmp`, `secure`). |
