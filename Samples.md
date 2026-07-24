@@ -33,6 +33,9 @@ This file provides a technical catalog of the binaries, scripts, and certificate
 | **LapDogs** | Bash startup script | SHA-256 | `75618401b64046d970df49fcfdfcc36174b0aae27ac4e1c178dc75219992080a` | [SecurityScorecard](https://securityscorecard.com/wp-content/uploads/2025/06/LapDogs-STRIKE-Report-June-2025.pdf) |
 | **UAT-7810 (LapDogs)** | **LEASHTEST** (iot-test) | SHA-256 | `1b5649b479fd625de5c8120873644b5eb669cc89cd504582c18e0ae350fd8823` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
 | **UAT-7810 (LapDogs)** | **LONGLEASH** (ff-agent / nz1.0) | SHA-256 | `755fcee1337a252203002ecfdf673a08cfadeda8d738bef2d518a08e0626aa4f` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **UAT-7810 (LapDogs)** | **DOGLEASH** | SHA-256 | `dc4f25b2247cfdd6fc96848db30a178baa4419a4c854e86e315b465836102d14` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **UAT-7810 (LapDogs)** | **DOGLEASH** | SHA-256 | `ac8eae94d27122f4751bc96d9ea52d30000b7ca37569a2291b2710824ca3396f` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
+| **UAT-7810 (LapDogs)** | **DOGLEASH** | SHA-256 | `425bf771c8c9f740b1ae9803dcb4fd45af4d6a6f171fcc72fc7d511095ca82ce` | [Cisco Talos](https://blog.talosintelligence.com/uat-7810/) |
 | **GOREshell (Windows)** | `glib-2.0.dll` | SHA-1 | `cb2d18fb91f0cd88e82cb36b614cfedf3e4ae49b` | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
 | **GOREshell (Linux)** | `snapd` | SHA-1 | `411180c89953ab5e0c59bd4b835eef740b550823` | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
 | **GOREshell (Linux)** | `update-notifier` | SHA-1 | `7dabf87617d646a9ec3e135b5f0e5edae50cd3b9` | [SentinelOne](https://www.sentinelone.com/labs/follow-the-smoke-china-nexus-threat-actors-hammer-at-the-doors-of-top-tier-targets/) |
