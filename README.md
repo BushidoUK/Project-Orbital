@@ -11,6 +11,7 @@ Project ORBITAL is a centralized matrix for mapping, fingerprinting, and hunting
 - [Components of ORBs](https://github.com/BushidoUK/Project-Orbital/blob/main/Components.md)
 - [ORB Malware Samples](https://github.com/BushidoUK/Project-Orbital/blob/main/Samples.md)
 - [ORB Fingerprints](https://github.com/BushidoUK/Project-Orbital/blob/main/Fingerprints.md)
+- [ORB Takedowns](https://github.com/BushidoUK/Project-Orbital/blob/main/Takedowns.md)
 
 ---
 
