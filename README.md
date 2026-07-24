@@ -13,6 +13,11 @@ Project ORBITAL is a centralized matrix for mapping, fingerprinting, and hunting
 - [ORB Fingerprints](https://github.com/BushidoUK/Project-Orbital/blob/main/Fingerprints.md)
 - [ORB Takedowns](https://github.com/BushidoUK/Project-Orbital/blob/main/Takedowns.md)
 
+> [!NOTE]
+> Each time this respository is updated, a GitHub Action is run that generates a new version of `index.html` that when downloaded runs a local Graph Visualisation tool.
+
+<img width="500" alt="Vis" src="https://github.com/user-attachments/assets/65206e8c-dcb6-4d15-a6bf-2c80c05fa9c1" />
+
 ---
 
 ## ORB Library
