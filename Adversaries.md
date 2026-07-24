@@ -4,6 +4,7 @@ This file tracks the relationship between known threat groups and the ORB networ
 
 | Named Threat Group | Associated ORB Network / Cluster | Role & Context | MITRE Campaign | MITRE Group | 
 | :--- | :--- | :--- | :--- | :--- |
+| **Storm-0940** | **Quad7** | A botnet used for password spraying, brute-force attacks, credential dumping, lateral movement, and data exfiltration | [C0055](https://attack.mitre.org/campaigns/C0055/) | |
 | **UNC2630** (APT5) | **SPACEHOP** (ORB3) | A cluster with suspected links to APT5 that used SPACEHOP nodes to exploit vulnerabilities like CVE-2022-27518 in Citrix ADC and Citrix Gateway for initial access. | [C0052](https://attack.mitre.org/campaigns/C0052/) | [G1023](https://attack.mitre.org/groups/G1023/) |
 | **APT15** (Ke3Chang, Nylon Typhoon) | **SPACEHOP** (ORB3) | A China-nexus threat actor that leases access to the SPACEHOP provisioned VPS network to conduct reconnaissance and exploitation. | [C0052](https://attack.mitre.org/campaigns/C0052/) | [G0004](https://attack.mitre.org/groups/G0004/) |
 | **APT15** (Ke3Chang, Nylon Typhoon) | **PurpleHaze** | SentinelOne tracks the PurpleHaze network as an infrastructure cluster operated from China and actively shared among several suspected Chinese cyberespionage actors. | [C0052](https://attack.mitre.org/campaigns/C0052/) | [G0004](https://attack.mitre.org/groups/G0004/) |
