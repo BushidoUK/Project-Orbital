@@ -5,6 +5,7 @@ This file provides a technical catalog of the binaries, scripts, and certificate
 | Malware Family / Cluster | Filename / Identifier | Hash Type | Hash Value | Source Report |
 | --- | --- | --- | --- | --- |
 | **Bulbature** | bulbature | SHA-256 | [`41e189a5b68f305ab6251a06475b76777bda0d035ea06cd569306ed5c98bdc98`](https://www.virustotal.com/gui/file/41e189a5b68f305ab6251a06475b76777bda0d035ea06cd569306ed5c98bdc98) | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
+| **ORBWEAVER** | WHIPWEAVE | SHA-256 | `30093c2502fed7b2b74597d06b91f57772f2ae50ac420bcaa627038af33a6982` | [Symantec](https://www.security.com/threat-intelligence/cloud-espionage-attacks) | 
 | **GobRAT** | zone.arm | SHA-256 | `48b243fd7ed8bc0b7ce663f0b3fc34f07fcf9fb04bf8bceaff8b7453ab4e5318` | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
 | **GobRAT** | zone.x86_64 | SHA-256 | [`91eaa94223c12ddc89eca5220a8c57f0254f587f73c9edc161fc161a56e2c2f0`](https://www.virustotal.com/gui/file/91eaa94223c12ddc89eca5220a8c57f0254f587f73c9edc161fc161a56e2c2f0) | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
 | **GobRAT** | zone.i686 | SHA-256 | `b1c21264a60edb64895c8c61507211a829f13068541f875b615e6c1c363122ba` | [Sekoia](https://www.sekoia.com/blog/bulbature-beneath-the-waves-of-gobrat) |
